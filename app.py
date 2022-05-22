@@ -5,6 +5,7 @@ import os
 import PIL
 import json
 import time
+import dotenv
 import pickle
 import requests
 from pathlib import Path
@@ -16,6 +17,9 @@ from logging.handlers import TimedRotatingFileHandler
 if not "logs" in os.listdir(): os.mkdir("logs")
 if not "sessions" in os.listdir(): os.mkdir("sessions")
 if not "downloads" in os.listdir(): os.mkdir("downloads")
+
+
+dotenv.load_dotenv()
 
 
 # Silence other loggers
@@ -302,5 +306,6 @@ class InstagramDownloader:
 
 
 
-x = InstagramDownloader(input("Username: "), input("Password: "))
-x.start()
+username, password = os.getenv("instagram_username"), os.getenv("instagram_password")
+app = InstagramDownloader(username or input("Username: "), password or input("Password: "))
+app.start()
