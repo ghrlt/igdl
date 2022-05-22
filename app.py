@@ -39,11 +39,11 @@ logger.addHandler(handler)
 
 
 class InstagramDownloader:
-	def __init__(self, username: str, password: str, fresh_login: bool=False):
+	def __init__(self, username: str, password: str):
 		self.username = username
 		session_path = Path(f"sessions/{self.username}")
 
-		if os.path.exists(session_path) and not fresh_login:
+		if os.path.exists(session_path):
 			with open(session_path, "rb") as f:
 				# I would like to be able to encrypt the data.. but how?
 				self.session = pickle.load(f, encoding="utf-8")
@@ -51,9 +51,11 @@ class InstagramDownloader:
 			self.session = {}
 
 		self.bot = instagrapi.Client(settings=self.session)
-		try: self.bot.login(username, password)
-		except: return InstagramDownloader(username=username, password=password, fresh_login=True)
-
+		try:
+			self.bot.login(username, password)
+		except:
+			self.bot = instagrapi.Client()
+			self.bot.login(username, password)
 
 
 		try:
