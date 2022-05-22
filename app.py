@@ -165,6 +165,22 @@ class InstagramDownloader:
 	def handleText(self, msg):
 		logger.debug("Handling a text message from %s on %s", msg.user_id, msg.thread_id)
 
+		text = False
+
+		words = msg.text.split()
+
+		if "help" in words:
+			text = "Hi! I am @ghrlt.downloader and I'm a bot.\n@gahrlt made me in order to allow any Instagram user to download any content they want to save, easily, securely and in an asynchronous way.\n\nYou browse content, you send me some, and once you ended your browsing session, you download the content I sent you back!"
+		elif "donation" in words or "support" in words:
+			text = "Hey! If you would like to support me (@gahrlt), don't hesitate to send me a dm.\nIt would means a lot to me 💖"
+
+		elif ("not" in words and "working" in words) or "bug" in words:
+			text = "Did you just encounter a problem? If so, contact me here -> @gahrlt"
+
+		if text: dm = self.bot.direct_answer(msg.thread_id, text)
+
+		logger.debug("Handled a text message from %s on %s! (%s)", msg.user_id, msg.thread_id, "replied smth" if text else "ignored msg")
+
 	def handleLink(self, msg):
 		logger.debug("Handling a link message from %s on %s", msg.user_id, msg.thread_id)
 
