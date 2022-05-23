@@ -106,6 +106,11 @@ class InstagramDownloader:
 				self.handleNewThreadMessages(thread)
 
 			time.sleep(every)
+
+			# Delete previous check medias
+			[f.unlink() for f in Path("downloads").glob("*") if f.is_file()]
+
+			# Re-loop
 			self.checkForNewThreadMessages(every=every)
 
 	def handleNewThreadMessages(self, thread):
@@ -158,6 +163,9 @@ class InstagramDownloader:
 
 			elif msg.item_type == "placeholder":
 				self.handleUnavailableThing(msg)
+			elif msg.item_type == "action_log":
+				pass
+
 			else:
 				print(msg.item_type, msg.timestamp)
 				print(msg)
@@ -259,6 +267,7 @@ class InstagramDownloader:
 		logger.debug("Handling a post sent by %s on %s", msg.user_id, msg.thread_id)
 		
 		dms = []
+		path = None
 		
 		if msg.media_share.media_type == 1:
 			path = self.bot.photo_download(msg.media_share.pk, self.temp_dl_path)
@@ -277,11 +286,22 @@ class InstagramDownloader:
 
 				elif str(path).endswith('.jpg'):
 					dms.append( self.bot.direct_send_photo(path, thread_ids=[msg.thread_id]) )
+
+				elif str(path).endswith('.webp'):				
+					new_path = str(path).split('.')[0] + ".jpg"
+
+					im = PIL.Image.open(path).convert('RGB')
+					im.save(new_path, "JPEG")
+
+					path = new_path
+
+					dms.append( self.bot.direct_send_photo(path, thread_ids=[msg.thread_id]) )
+
 				else:
 					logger.critical("WTF - Unknown file format downloaded... %s", path)
 
 
-		logger.info("Downloaded and sent back a post to %s", msg.thread_id)
+		logger.info("Downloaded and sent back a post (%s media) to %s", len(dms), msg.thread_id)
 
 	def handleReel(self, msg):
 		logger.debug("Handling a reel sent by %s on %s", msg.user_id, msg.thread_id)
