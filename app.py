@@ -17,6 +17,7 @@ from logging.handlers import TimedRotatingFileHandler
 if not "logs" in os.listdir(): os.mkdir("logs")
 if not "sessions" in os.listdir(): os.mkdir("sessions")
 if not "downloads" in os.listdir(): os.mkdir("downloads")
+if not "users_preferences.json" in os.listdir(): open('users_preferences.json', 'w').write('{}')
 
 
 dotenv.load_dotenv()
@@ -24,8 +25,8 @@ dotenv.load_dotenv()
 
 # Silence other loggers
 for log_name, log_obj in logging.Logger.manager.loggerDict.items():
-     if log_name != __name__:
-          log_obj.disabled = True
+	 if log_name != __name__:
+		  log_obj.disabled = True
 
 logging.basicConfig(
 	format='%(asctime)s %(levelname)-8s %(message)s',
@@ -87,13 +88,16 @@ class InstagramDownloader:
 	def checkForNewThreadMessages(self, every: int=20, _429ed: int=0):
 		while self.running:
 			logger.debug("Checking for new messages")
-
-			
+	
 			try:
 				new = self.bot.direct_threads(selected_filter="unread")
 				new += self.bot.direct_pending_inbox()
-			except PleaseWaitFewMinutes:
-				logging.info("Rate limited.. Sleeping for a while")
+			except Exception as e:
+				if isinstance(e, PleaseWaitFewMinutes):
+					logging.info("Rate limited.. Sleeping for a while")
+				else:
+					logging.error("Error: %s", str(e))
+
 				_429ed += 1
 				time.sleep(every*(5+_429ed))
 
@@ -181,14 +185,39 @@ class InstagramDownloader:
 
 		words = msg.text.split()
 
-		if "help" in words:
-			text = "Hi! I am @ghrlt.downloader and I'm a bot.\n@gahrlt made me in order to allow any Instagram user to download any content they want to save, easily, securely and in an asynchronous way.\n\nYou browse content, you send me some, and once you ended your browsing session, you download the content I sent you back!"
-		elif "donation" in words or "support" in words:
-			text = "Hey! If you would like to support me (@gahrlt), don't hesitate to send me a dm.\nIt would means a lot to me 💖"
+		if msg.text[0] == "/":
+			is_command = True
+			command = msg.text.split()[0][1:].lower()
+			args = msg.text.split()[1:]
 
-		elif ("not" in words and "working" in words) or "bug" in words:
-			text = "Did you just encounter a problem? If so, contact me here -> @gahrlt"
 
+		if not is_command:
+			if "help" in words:
+				text = "Hi! I am @ghrlt.downloader and I'm a bot.\n@gahrlt made me in order to allow any Instagram user to download any content they want to save, easily, securely and in an asynchronous way.\n\nYou browse content, you send me some, and once you ended your browsing session, you download the content I sent you back!"
+			elif "donation" in words or "support" in words:
+				text = "Hey! If you would like to support me (@gahrlt), don't hesitate to send me a dm.\nIt would means a lot to me 💖"
+
+			elif ("not" in words and "working" in words) or "bug" in words:
+				text = "Did you just encounter a problem? If so, contact me here -> @gahrlt"
+
+		else:
+			if command == "sendback":
+				if args[0] == "link":
+					self.editUserPreferences(
+						msg.user_id, {"send_link_to_media_instead_of_media": True}
+					)
+					text = "Successfully updated your preferences."
+
+				elif args[0] == "media":
+					self.editUserPreferences(
+						msg.user_id, {"send_link_to_media_instead_of_media": False}
+					)
+					text = "Successfully updated your preferences."
+
+				else:
+					text = f"Unknow parameter {args[0]} for /{command}"
+
+		
 		if text: dm = self.bot.direct_answer(msg.thread_id, text)
 
 		logger.debug("Handled a text message from %s on %s! (%s)", msg.user_id, msg.thread_id, "replied smth" if text else "ignored msg")
@@ -202,26 +231,62 @@ class InstagramDownloader:
 		logger.debug("Handling a raven_media from %s on %s", msg.user_id, msg.thread_id)
 		
 		if msg.visual_media['media'].get('id'): #Not seen yet
+			is_video = False
 			img = msg.visual_media['media']['image_versions2']['candidates'][0]['url']
-			path = self.bot.photo_download_by_url(img, folder=self.temp_dl_path)
-			if str(path).endswith('.webp'):
-				new_path = str(path).split('.')[0] + ".jpg"
-				im = PIL.Image.open(path).convert('RGB')
-				im.save(new_path, "JPEG")
+	
+			if msg.visual_media['media']['video_versions']:
+				is_video = True
+				video = msg.visual_media['media']['video_versions'][0]['url']
 
-				path = new_path
+			if self.getUserPreferences(msg.user_id).get('send_link_to_media_instead_of_media'):
+				dm = self.bot.direct_send(img if not is_video else video, thread_ids=[msg.thread_id])
+				logger.debug("Obtained and sent back a link to raven_media to %s", msg.thread_id)
 
-			dm = self.bot.direct_send_photo(path, thread_ids=[msg.thread_id])
+			else:
+				if is_video:
+					path = self.bot.video_download_by_url(video, folder=self.temp_dl_path)
 
+					dm = self.bot.direct_send_video(path, thread_ids=[msg.thread_id])
+				else:
+					path = self.bot.photo_download_by_url(img, folder=self.temp_dl_path)
+					if str(path).endswith('.webp'):
+						new_path = str(path).split('.')[0] + ".jpg"
+						im = PIL.Image.open(path).convert('RGB')
+						im.save(new_path, "JPEG")
+
+						path = new_path
+
+					dm = self.bot.direct_send_photo(path, thread_ids=[msg.thread_id])
+				
+				logger.debug("Downloaded and sent back a raven_media to %s", msg.thread_id)
+
+			
 			# UNABLE TO MARK AS READ....
 			#r = self.bot.private.request(
 			#	"GET",
-			#    msg.visual_media['media']['image_versions2']['candidates'][0]['fallback']['url']
+			#	msg.visual_media['media']['image_versions2']['candidates'][0]['fallback']['url']
 			#)
 			#print(r, r.content) #<Response [400]> b'{"message":"can\'t load media","status":"fail"}'
 
-			logger.debug("Downloaded and sent back a raven_media from %s on %s", msg.user_id, msg.thread_id)
+	def handleSticker(self, msg):
+		logger.debug("Handling a sticker sent by %s on %s", msg.user_id, msg.thread_id)
 
+		url = msg.animated_media['images']['fixed_height']['mp4']
+		
+		if self.getUserPreferences(msg.user_id).get('send_link_to_media_instead_of_media'):
+			dm = self.bot.direct_send(url, thread_ids=[msg.thread_id])
+
+			logger.debug("Obtained and sent back a link to sticker to %s", msg.thread_id)
+		else:
+			fp = f"{self.temp_dl_path}/{msg.animated_media['id']}.mp4"
+
+			r = requests.get(url).content
+			with open(fp, 'wb') as f:
+				f.write(r)
+
+			dm = self.bot.direct_send_video(fp, thread_ids=[msg.thread_id])
+		
+			logger.info("Downloaded and sent back a sticker to %s", msg.thread_id)
 
 	def handleUnavailableThing(self, msg):
 		logger.debug("Handling a placeholder message from %s on %s", msg.user_id, msg.thread_id)
@@ -229,39 +294,16 @@ class InstagramDownloader:
 		if msg.placeholder['title'] == "Post Unavailable":
 			self.bot.direct_answer(msg.thread_id, msg.placeholder['message'])
 		else:
-			print(msg.placeholder)
+			logging.critical("%s - %s | %s", msg.user_id, msg.thread_id, msg.placeholder)
 
 		logger.debug("Handled placeholder message from %s on %s", msg.user_id, msg.thread_id)
 
 	def handleMedia(self, msg):
 		logger.debug("Handling a media sent by %s on %s", msg.user_id, msg.thread_id)
 
-		print(msg)
 		dm = self.bot.direct_answer(msg.thread_id, "Here it is lol ↗")
 
 		logger.info("Replied to %s who wanted me to download a normal media", msg.user_id)
-
-	def handleIGTV(self, msg):
-		logger.debug("Handling an IGTV post sent by %s on %s", msg.user_id, msg.thread_id)
-
-		path = self.bot.igtv_download(msg.felix_share['video']['pk'], self.temp_dl_path)
-		dm = self.bot.direct_send_video(path, thread_ids=[msg.thread_id])
-		
-		logger.info("Downloaded and sent back an IGTV post to %s", msg.thread_id)
-
-	def handleSticker(self, msg):
-		logger.debug("Handling a sticker sent by %s on %s", msg.user_id, msg.thread_id)
-
-		url = msg.animated_media['images']['fixed_height']['mp4']
-		fp = f"{self.temp_dl_path}/{msg.animated_media['id']}.mp4"
-
-		r = requests.get(url).content
-		with open(fp, 'wb') as f:
-			f.write(r)
-
-		dm = self.bot.direct_send_video(fp, thread_ids=[msg.thread_id])
-		
-		logger.info("Downloaded and sent back a sticker to %s", msg.thread_id)
 
 	def handleSharedPost(self, msg):
 		logger.debug("Handling a post sent by %s on %s", msg.user_id, msg.thread_id)
@@ -270,59 +312,145 @@ class InstagramDownloader:
 		path = None
 		
 		if msg.media_share.media_type == 1:
-			path = self.bot.photo_download(msg.media_share.pk, self.temp_dl_path)
-			dms.append( self.bot.direct_send_photo(path, thread_ids=[msg.thread_id]) )
+			url = self.bot.media_info(msg.media_share.pk).thumbnail_url
+
+			if self.getUserPreferences(msg.user_id).get('send_link_to_media_instead_of_media'):
+				dms.append( self.bot.direct_send(url, thread_ids=[msg.thread_id]) )
+			else:
+				path = self.bot.photo_download_by_url(url, self.temp_dl_path)
+				dms.append( self.bot.direct_send_photo(path, thread_ids=[msg.thread_id]) )
 
 		elif msg.media_share.media_type == 2:
-			path = self.bot.video_download(msg.media_share.pk, self.temp_dl_path)
-			dms.append( self.bot.direct_send_video(path, thread_ids=[msg.thread_id]) )
+			url = self.bot.media_info(msg.media_share.pk).video_url
+
+			if self.getUserPreferences(msg.user_id).get('send_link_to_media_instead_of_media'):
+				dms.append(self.bot.direct_send(url, thread_ids=[msg.thread_id]) )
+			else:
+				path = self.bot.video_download_by_url(url, self.temp_dl_path)
+				dms.append( self.bot.direct_send_video(path, thread_ids=[msg.thread_id]) )
 
 		elif msg.media_share.media_type == 8:
-			paths = self.bot.album_download(msg.media_share.pk, self.temp_dl_path)
-			for path in paths:
-				if str(path).endswith('.mp4'):
-					try: dms.append( self.bot.direct_send_video(path, thread_ids=[msg.thread_id]) )
-					except: dms.append( self.bot.direct_send_video(path, thread_ids=[msg.thread_id]) )
+			if self.getUserPreferences(msg.user_id).get('send_link_to_media_instead_of_media'):
+				media = self.bot.media_info(msg.media_share.pk)
+				for resource in media.resources:
+					if resource.media_type == 1:
+						dms.append( self.bot.direct_send(resource.thumbnail_url, thread_ids=[msg.thread_id]) )
 
-				elif str(path).endswith('.jpg'):
-					dms.append( self.bot.direct_send_photo(path, thread_ids=[msg.thread_id]) )
+					elif resource.media_type == 2:
+						dms.append( self.bot.direct_send(resource.video_url, thread_ids=[msg.thread_id]) )
 
-				elif str(path).endswith('.webp'):				
-					new_path = str(path).split('.')[0] + ".jpg"
+			else:
+				paths = self.bot.album_download(msg.media_share.pk, self.temp_dl_path)
 
-					im = PIL.Image.open(path).convert('RGB')
-					im.save(new_path, "JPEG")
+				for path in paths:
+					if str(path).endswith('.mp4'):
+						try: dms.append( self.bot.direct_send_video(path, thread_ids=[msg.thread_id]) )
+						except: dms.append( self.bot.direct_send_video(path, thread_ids=[msg.thread_id]) )
 
-					path = new_path
+					elif str(path).endswith('.jpg'):
+						dms.append( self.bot.direct_send_photo(path, thread_ids=[msg.thread_id]) )
 
-					dms.append( self.bot.direct_send_photo(path, thread_ids=[msg.thread_id]) )
+					elif str(path).endswith('.webp'):				
+						new_path = str(path).split('.')[0] + ".jpg"
 
-				else:
-					logger.critical("WTF - Unknown file format downloaded... %s", path)
+						im = PIL.Image.open(path).convert('RGB')
+						im.save(new_path, "JPEG")
+
+						path = new_path
+
+						dms.append( self.bot.direct_send_photo(path, thread_ids=[msg.thread_id]) )
+
+					else:
+						logger.critical("WTF - Unknown file format downloaded... %s", path)
 
 
-		logger.info("Downloaded and sent back a post (%s media) to %s", len(dms), msg.thread_id)
+		if self.getUserPreferences(msg.user_id).get('send_link_to_media_instead_of_media'):
+			logger.info("Sent back post media link (%s media) to %s", len(dms), msg.thread_id)
+		else:
+			logger.info("Downloaded and sent back a post (%s media) to %s", len(dms), msg.thread_id)
 
 	def handleReel(self, msg):
 		logger.debug("Handling a reel sent by %s on %s", msg.user_id, msg.thread_id)
 		
-		path = self.bot.clip_download(msg.clip.pk, self.temp_dl_path)
-		dm = self.bot.direct_send_video(path, thread_ids=[msg.thread_id])
+		url = self.bot.media_info(msg.clip.pk).video_url
+		if self.getUserPreferences(msg.user_id).get('send_link_to_media_instead_of_media'):
+			dm = self.bot.direct_send(url, thread_ids=[msg.thread_id])
 
-		logger.info("Downloaded and sent back a reel to %s", msg.thread_id)
+			logger.info("Sent back a Reel media link to %s", msg.thread_id)
+		else:
+			path = self.bot.clip_download_by_url(url, self.temp_dl_path)
+			dm = self.bot.direct_send_video(path, thread_ids=[msg.thread_id])
+
+			logger.info("Downloaded and sent back a reel to %s", msg.thread_id)
+
+	def handleIGTV(self, msg):
+		logger.debug("Handling an IGTV post sent by %s on %s", msg.user_id, msg.thread_id)
+
+
+		url = self.bot.media_info(msg.felix_share['video']['pk']).video_url
+	
+		if self.getUserPreferences(msg.user_id).get('send_link_to_media_instead_of_media'):
+			dm = self.bot.direct_send(url, thread_ids=[msg.thread_id])
+			
+			logger.debug("Obtained and sent back a link to an IGTV post to %s", msg.thread_id)
+		else:
+			path = self.bot.igtv_download_by_url(url, self.temp_dl_path)
+			dm = self.bot.direct_send_video(path, thread_ids=[msg.thread_id])
+		
+			logger.info("Downloaded and sent back an IGTV post to %s", msg.thread_id)
 
 	def handleStory(self, msg):
 		logger.debug("Handling a shared story from %s on %s", msg.user_id, msg.thread_id)
 
-		path = self.bot.story_download(msg.story_share['media']['pk'], folder=self.temp_dl_path)
+		story = self.bot.story_info(msg.story_share['media']['pk'])
+		url = story.video_url or story.thumbnail_url
 
-		if str(path).endswith('.mp4'):
-			dm = self.bot.direct_send_video(path, thread_ids=[msg.thread_id])
-		elif str(path).endswith('.jpg'):
-			dm = self.bot.direct_send_photo(path, thread_ids=[msg.thread_id])
+		if self.getUserPreferences(msg.user_id).get('send_link_to_media_instead_of_media'):
+			dm = self.bot.direct_send(url, thread_ids=[msg.thread_id])
+
+			logger.debug("Obtained and sent back a story media link to %s", msg.thread_id)
+
+		else:
+			path = self.bot.story_download_by_url(url, folder=self.temp_dl_path)
+
+			if str(path).endswith('.mp4'):
+				dm = self.bot.direct_send_video(path, thread_ids=[msg.thread_id])
+			elif str(path).endswith('.jpg'):
+				dm = self.bot.direct_send_photo(path, thread_ids=[msg.thread_id])
+			elif str(path).endswith('.webp'):
+				new_path = str(path).split('.')[0] + ".jpg"
+				im = PIL.Image.open(path).convert('RGB')
+				im.save(new_path, "JPEG")
+
+				path = new_path
+				dm = self.bot.direct_send_photo(path, thread_ids=[msg.thread_id])
 
 
-		logger.debug("Downloaded and sent back story of %s to %s on %s", msg.story_share['media']['user']['pk'], msg.user_id, msg.thread_id)
+			logger.debug("Downloaded and sent back story of %s to %s on %s", msg.story_share['media']['user']['pk'], msg.user_id, msg.thread_id)
+
+
+	""" User preferences """
+	def editUserPreferences(self, user_id: str, preferences: dict):
+		with open('users_preferences.json', 'r', encoding='utf-8') as f:
+			uprefs = json.load(f)
+
+		if not user_id in uprefs.keys():
+			uprefs[user_id] = {}
+
+		uprefs[user_id] = {**uprefs[user_id], **preferences} # Order is important! preferences have to overwrite current user preferences
+
+		with open('users_preferences.json', 'w', encoding='utf-8') as f:
+			json.dump(uprefs, f, indent=2, ensure_ascii=False)
+
+	def getUserPreferences(self, user_id: str):
+		with open('users_preferences.json', 'r', encoding='utf-8') as f:
+			uprefs = json.load(f)
+
+		if not isinstance(user_id, str):
+			user_id = str(user_id)
+
+		return uprefs.get(user_id) or {}
+
 
 
 
