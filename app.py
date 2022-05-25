@@ -3,11 +3,13 @@ from instagrapi.exceptions import UserNotFound, PleaseWaitFewMinutes, LoginRequi
 
 import os
 import PIL
+import sys
 import json
 import time
 import dotenv
 import pickle
 import requests
+import traceback
 from pathlib import Path
 
 import logging
@@ -22,6 +24,7 @@ if not "users_preferences.json" in os.listdir(): open('users_preferences.json', 
 
 dotenv.load_dotenv()
 
+sys.setrecursionlimit(10**6)
 
 # Silence other loggers
 for log_name, log_obj in logging.Logger.manager.loggerDict.items():
@@ -94,9 +97,10 @@ class InstagramDownloader:
 				new += self.bot.direct_pending_inbox()
 			except Exception as e:
 				if isinstance(e, PleaseWaitFewMinutes):
-					logging.info("Rate limited.. Sleeping for a while")
+					logger.error("Rate limited.. Sleeping for a while")
 				else:
-					logging.error("Error: %s", str(e))
+					logger.critical("%s", str(e))
+
 
 				_429ed += 1
 				time.sleep(every*(5+_429ed))
