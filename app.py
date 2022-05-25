@@ -111,7 +111,6 @@ class InstagramDownloader:
 			else: logger.debug("No unread messages")
 
 			for thread in new:
-				print(thread.__dict__)
 				self.handleNewThreadMessages(thread)
 
 			time.sleep(every)
