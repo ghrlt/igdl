@@ -88,7 +88,7 @@ class InstagramDownloader:
 	def checkForNewThreadMessages(self, every: int=20, _429ed: int=0):
 		while self.running:
 			logger.debug("Checking for new messages")
-	
+
 			try:
 				new = self.bot.direct_threads(selected_filter="unread")
 				new += self.bot.direct_pending_inbox()
@@ -107,6 +107,7 @@ class InstagramDownloader:
 			else: logger.debug("No unread messages")
 
 			for thread in new:
+				print(thread.__dict__)
 				self.handleNewThreadMessages(thread)
 
 			time.sleep(every)
@@ -182,8 +183,10 @@ class InstagramDownloader:
 		logger.debug("Handling a text message from %s on %s", msg.user_id, msg.thread_id)
 
 		text = False
+		is_command = False
 
 		words = msg.text.split()
+
 
 		if msg.text[0] == "/":
 			is_command = True
