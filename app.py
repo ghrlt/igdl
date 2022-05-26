@@ -147,36 +147,45 @@ class InstagramDownloader:
 			unread_msgs.append(msg)
 
 
-		for msg in reversed(unread_msgs): #From older to newer instead of latest to oldest
+		for i,msg in enumerate(reversed(unread_msgs)): #From older to newer instead of latest to oldest
+			try:
+				if msg.item_type == "text":
+					self.handleText(msg)
+				elif msg.item_type == "link":
+					self.handleLink(msg)
+				elif msg.item_type == "animated_media":
+					self.handleSticker(msg)
+				elif msg.item_type == "media":
+					self.handleMedia(msg)
+				
+				elif msg.item_type == "felix_share":
+					self.handleIGTV(msg)
+				elif msg.item_type == "media_share":
+					self.handleSharedPost(msg)
+				elif msg.item_type == "clip":
+					self.handleReel(msg)
+				elif msg.item_type == "story_share":
+					self.handleStory(msg)
+				elif msg.item_type == "raven_media":
+					self.handleTempPicture(msg)
 
-			if msg.item_type == "text":
-				self.handleText(msg)
-			elif msg.item_type == "link":
-				self.handleLink(msg)
-			elif msg.item_type == "animated_media":
-				self.handleSticker(msg)
-			elif msg.item_type == "media":
-				self.handleMedia(msg)
-			
-			elif msg.item_type == "felix_share":
-				self.handleIGTV(msg)
-			elif msg.item_type == "media_share":
-				self.handleSharedPost(msg)
-			elif msg.item_type == "clip":
-				self.handleReel(msg)
-			elif msg.item_type == "story_share":
-				self.handleStory(msg)
-			elif msg.item_type == "raven_media":
-				self.handleTempPicture(msg)
+				elif msg.item_type == "placeholder":
+					self.handleUnavailableThing(msg)
+				elif msg.item_type == "action_log":
+					pass
 
-			elif msg.item_type == "placeholder":
-				self.handleUnavailableThing(msg)
-			elif msg.item_type == "action_log":
-				pass
+				else:
+					print(msg.item_type, msg.timestamp)
+					print(msg)
 
-			else:
-				print(msg.item_type, msg.timestamp)
-				print(msg)
+			except Exception as e:
+				logger.error(e)
+
+				if str(e) == "Transcode not finished yet":
+					return self.handleNewThreadMessages(unread_msgs[i:])
+
+				else:
+					raise e
 
 		self.bot.direct_send_seen(thread.id)
 		#except: self.bot.direct_answer(thread.id, f"Hello! I am @{self.bot_account.username}\nCheck me out!")
