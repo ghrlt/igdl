@@ -181,7 +181,7 @@ class InstagramDownloader:
 			except Exception as e:
 				logger.error(e)
 
-				if str(e) == "Transcode not finished yet":
+				if str(e) == "Transcode not finished yet.":
 					return self.handleNewThreadMessages(unread_msgs[i:])
 
 				else:
