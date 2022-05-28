@@ -137,7 +137,7 @@ class InstagramDownloader:
 					if msg.item_type != "raven_media":
 						break
 					else:
-						# OR it has been seen for real
+						# OR it has been seen for real (but not yet by bot, like, just manually)
 						if msg.visual_media['seen_count'] > 0:
 							break
 			except:
@@ -182,7 +182,8 @@ class InstagramDownloader:
 				logger.error(e)
 
 				if str(e) == "Transcode not finished yet.":
-					return self.handleNewThreadMessages(unread_msgs[i:])
+					thread.messages = thread.messages[i:]
+					return self.handleNewThreadMessages(thread)
 
 				else:
 					raise e
