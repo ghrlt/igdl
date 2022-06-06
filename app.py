@@ -182,8 +182,10 @@ class InstagramDownloader:
 				logger.error(e)
 
 				if str(e) == "Transcode not finished yet.":
-					thread.messages = thread.messages[i:]
-					return self.handleNewThreadMessages(thread)
+					# This was causing the bot to upload AN ENORMEOUS amount of time the same post
+					#thread.messages = thread.messages[i:]
+					#return self.handleNewThreadMessages(thread)
+					pass
 
 				else:
 					raise e
@@ -333,7 +335,7 @@ class InstagramDownloader:
 			if self.getUserPreferences(msg.user_id).get('send_link_to_media_instead_of_media'):
 				dms.append( self.bot.direct_send(url, thread_ids=[msg.thread_id]) )
 			else:
-				path = self.bot.photo_download_by_url(url, self.temp_dl_path)
+				path = self.bot.photo_download_by_url(url, folder=self.temp_dl_path)
 				dms.append( self.bot.direct_send_photo(path, thread_ids=[msg.thread_id]) )
 
 		elif msg.media_share.media_type == 2:
@@ -342,7 +344,7 @@ class InstagramDownloader:
 			if self.getUserPreferences(msg.user_id).get('send_link_to_media_instead_of_media'):
 				dms.append(self.bot.direct_send(url, thread_ids=[msg.thread_id]) )
 			else:
-				path = self.bot.video_download_by_url(url, self.temp_dl_path)
+				path = self.bot.video_download_by_url(url, folder=self.temp_dl_path)
 				dms.append( self.bot.direct_send_video(path, thread_ids=[msg.thread_id]) )
 
 		elif msg.media_share.media_type == 8:
@@ -356,7 +358,7 @@ class InstagramDownloader:
 						dms.append( self.bot.direct_send(resource.video_url, thread_ids=[msg.thread_id]) )
 
 			else:
-				paths = self.bot.album_download(msg.media_share.pk, self.temp_dl_path)
+				paths = self.bot.album_download(msg.media_share.pk, folder=self.temp_dl_path)
 
 				for path in paths:
 					if str(path).endswith('.mp4'):
@@ -394,7 +396,7 @@ class InstagramDownloader:
 
 			logger.info("Sent back a Reel media link to %s", msg.thread_id)
 		else:
-			path = self.bot.clip_download_by_url(url, self.temp_dl_path)
+			path = self.bot.clip_download_by_url(url, folder=self.temp_dl_path)
 			dm = self.bot.direct_send_video(path, thread_ids=[msg.thread_id])
 
 			logger.info("Downloaded and sent back a reel to %s", msg.thread_id)
@@ -410,7 +412,7 @@ class InstagramDownloader:
 			
 			logger.debug("Obtained and sent back a link to an IGTV post to %s", msg.thread_id)
 		else:
-			path = self.bot.igtv_download_by_url(url, self.temp_dl_path)
+			path = self.bot.igtv_download_by_url(url, folder=self.temp_dl_path)
 			dm = self.bot.direct_send_video(path, thread_ids=[msg.thread_id])
 		
 			logger.info("Downloaded and sent back an IGTV post to %s", msg.thread_id)
