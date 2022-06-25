@@ -420,28 +420,33 @@ class InstagramDownloader:
 	def handleStory(self, msg):
 		logger.debug("Handling a shared story from %s on %s", msg.user_id, msg.thread_id)
 
-		story = self.bot.story_info(msg.story_share['media']['pk'])
-		url = story.video_url or story.thumbnail_url
-
-		if self.getUserPreferences(msg.user_id).get('send_link_to_media_instead_of_media'):
-			dm = self.bot.direct_send(url, thread_ids=[msg.thread_id])
-
-			logger.debug("Obtained and sent back a story media link to %s", msg.thread_id)
+		if not msg.story_share.get('media'):
+			dm = self.bot.direct_send(msg.story_share['message'], thread_ids=[msg.thread_id])
 
 		else:
-			path = self.bot.story_download_by_url(url, folder=self.temp_dl_path)
 
-			if str(path).endswith('.mp4'):
-				dm = self.bot.direct_send_video(path, thread_ids=[msg.thread_id])
-			elif str(path).endswith('.jpg'):
-				dm = self.bot.direct_send_photo(path, thread_ids=[msg.thread_id])
-			elif str(path).endswith('.webp'):
-				new_path = str(path).split('.')[0] + ".jpg"
-				im = PIL.Image.open(path).convert('RGB')
-				im.save(new_path, "JPEG")
+			story = self.bot.story_info(msg.story_share['media']['pk'])
+			url = story.video_url or story.thumbnail_url
 
-				path = new_path
-				dm = self.bot.direct_send_photo(path, thread_ids=[msg.thread_id])
+			if self.getUserPreferences(msg.user_id).get('send_link_to_media_instead_of_media'):
+				dm = self.bot.direct_send(url, thread_ids=[msg.thread_id])
+
+				logger.debug("Obtained and sent back a story media link to %s", msg.thread_id)
+
+			else:
+				path = self.bot.story_download_by_url(url, folder=self.temp_dl_path)
+
+				if str(path).endswith('.mp4'):
+					dm = self.bot.direct_send_video(path, thread_ids=[msg.thread_id])
+				elif str(path).endswith('.jpg'):
+					dm = self.bot.direct_send_photo(path, thread_ids=[msg.thread_id])
+				elif str(path).endswith('.webp'):
+					new_path = str(path).split('.')[0] + ".jpg"
+					im = PIL.Image.open(path).convert('RGB')
+					im.save(new_path, "JPEG")
+
+					path = new_path
+					dm = self.bot.direct_send_photo(path, thread_ids=[msg.thread_id])
 
 
 			logger.debug("Downloaded and sent back story of %s to %s on %s", msg.story_share['media']['user']['pk'], msg.user_id, msg.thread_id)
